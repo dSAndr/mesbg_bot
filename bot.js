@@ -1,5 +1,14 @@
 const { Telegraf } = require('telegraf');
 
+const http = require('http');
+
+http
+  .createServer((req, res) => {
+    res.writeHead(200);
+    res.end('OK');
+  })
+  .listen(process.env.PORT || 3000);
+
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 bot.launch();
