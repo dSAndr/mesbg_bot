@@ -213,7 +213,7 @@ bot.command('players', (ctx) => {
   ctx.reply(message);
 });
 
-bot.command('expand', (ctx) => {
+bot.command('expand', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
 
   if (registrationOpen) return ctx.reply('Открыта регистрация.');
