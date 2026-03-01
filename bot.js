@@ -1,7 +1,6 @@
-const { initDb, addPlayer, removePlayer, listPlayers } = require('./db');
+const { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer, getPlayer } = require('./db');
 const { Telegraf } = require('telegraf');
 const http = require('http');
-const { getPlayer } = require('./db');
 
 http.createServer((req, res) => {
   res.writeHead(200);
@@ -89,18 +88,6 @@ async function handleMove(ctx, kind, fileId) {
         moves.clear();
     }
 }
-
-async function countPlayers() {
-  const res = await pool.query(`SELECT COUNT(*)::int AS cnt FROM players`);
-  return res.rows[0].cnt;
-}
-
-async function hasPlayer(id) {
-  const res = await pool.query(`SELECT 1 FROM players WHERE id=$1 LIMIT 1`, [id]);
-  return res.rowCount > 0;
-}
-
-module.exports = { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer };
 
 bot.start((ctx) => {
     ctx.reply('Mae govannen, mellon\nПриветствую тебя, друг');

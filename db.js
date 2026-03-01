@@ -42,7 +42,20 @@ async function listPlayers() {
   return res.rows;
 }
 
-module.exports = { initDb, addPlayer, removePlayer, listPlayers };
+async function hasPlayer(id) {
+  const res = await pool.query(
+    `SELECT 1 FROM players WHERE id = $1 LIMIT 1`,
+    [id]
+  );
+  return res.rowCount > 0;
+}
+
+async function countPlayers() {
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM players`
+  );
+  return res.rows[0].cnt;
+}
 
 async function getPlayer(id) {
   const res = await pool.query(
