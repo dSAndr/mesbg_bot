@@ -43,3 +43,21 @@ async function listPlayers() {
 }
 
 module.exports = { initDb, addPlayer, removePlayer, listPlayers };
+
+async function getPlayer(id) {
+  const res = await pool.query(
+    `SELECT id, username, first_name, last_name FROM players WHERE id = $1`,
+    [id]
+  );
+  return res.rows[0] || null;
+}
+
+module.exports = {
+  initDb,
+  addPlayer,
+  removePlayer,
+  listPlayers,
+  countPlayers,
+  hasPlayer,
+  getPlayer
+};

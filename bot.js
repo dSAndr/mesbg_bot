@@ -1,17 +1,27 @@
+const { initDb, addPlayer, removePlayer, listPlayers } = require('./db');
 const { Telegraf } = require('telegraf');
-
 const http = require('http');
+const { getPlayer } = require('./db');
 
-http
-  .createServer((req, res) => {
-    res.writeHead(200);
-    res.end('OK');
-  })
-  .listen(process.env.PORT || 3000);
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('OK');
+}).listen(process.env.PORT || 3000);
+
+if (!process.env.BOT_TOKEN) {
+  console.error('BOT_TOKEN missing');
+  process.exit(1);
+}
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-bot.launch();
+initDb()
+  .then(() => {
+    console.log('DB ready');
+    return bot.launch();
+  })
+  .then(() => console.log('Bot launched'))
+  .catch(console.error);
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
@@ -80,6 +90,18 @@ async function handleMove(ctx, kind, fileId) {
     }
 }
 
+async function countPlayers() {
+  const res = await pool.query(`SELECT COUNT(*)::int AS cnt FROM players`);
+  return res.rows[0].cnt;
+}
+
+async function hasPlayer(id) {
+  const res = await pool.query(`SELECT 1 FROM players WHERE id=$1 LIMIT 1`, [id]);
+  return res.rowCount > 0;
+}
+
+module.exports = { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer };
+
 bot.start((ctx) => {
     ctx.reply('Mae govannen, mellon\nПриветствую тебя, друг');
 });
@@ -102,26 +124,21 @@ bot.command('lock', (ctx) => {
   ctx.reply('Регистрация закрыта.');
 });
 
-bot.command('join', (ctx) => {
-  if (!registrationOpen) {
-    return ctx.reply('Регистрация сейчас закрыта.');
-  }
-
-    if (players.size >= MAX_PLAYERS) {
-    return ctx.reply('Достигнут максимум игроков.');
-  }
+bot.command('join', async (ctx) => {
+  if (!registrationOpen) return ctx.reply('Регистрация сейчас закрыта.');
 
   const userId = ctx.from.id;
 
-  if (players.has(userId)) {
-    return ctx.reply('Ты уже зарегистрирован.');
-  }
+  if (await hasPlayer(userId)) return ctx.reply('Ты уже зарегистрирован.');
 
-  players.set(userId, {
-    id: ctx.from.id,
+  const total = await countPlayers();
+  if (total >= MAX_PLAYERS) return ctx.reply('Достигнут максимум игроков.');
+
+  await addPlayer({
+    id: userId,
     username: ctx.from.username,
     first_name: ctx.from.first_name,
-    last_name: ctx.from.last_name
+    last_name: ctx.from.last_name,
   });
 
   ctx.reply('Ты успешно зарегистрирован.');
@@ -132,124 +149,130 @@ bot.command('add', async (ctx) => {
 
   const parts = ctx.message.text.trim().split(/\s+/);
   const idStr = parts[1];
-
   if (!idStr) return ctx.reply('Использование: /add <id>');
 
   const userId = Number(idStr);
   if (!Number.isInteger(userId)) return ctx.reply('ID должен быть числом.');
 
-  if (players.has(userId)) return ctx.reply('Игрок уже зарегистрирован.');
+  if (await hasPlayer(userId)) return ctx.reply('Игрок уже зарегистрирован.');
 
   try {
     const chat = await bot.telegram.getChat(userId);
 
-    players.set(userId, {
+    await addPlayer({
       id: chat.id,
       first_name: chat.first_name || '',
       last_name: chat.last_name || '',
-      username: chat.username || null
+      username: chat.username || null,
     });
 
-    ctx.reply(`Добавлен: ${chat.first_name || ''} ${chat.last_name || ''} (@${chat.username || '-'})`);
+    return ctx.reply(
+      `Добавлен: ${(chat.first_name || '')} ${(chat.last_name || '')} ` +
+      `${chat.username ? `(@${chat.username})` : ''} [${chat.id}]`
+    );
   } catch (e) {
-    ctx.reply('Не удалось получить данные пользователя. Возможно, он не писал боту.');
+    // fallback: добавляем без имени
+    await addPlayer({ id: userId, first_name: 'Manual', last_name: '', username: null });
+    return ctx.reply(`Добавлен вручную: [${userId}]. (Имя не получил — возможно, он не писал боту)`);
   }
 });
 
-bot.command('remove', (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) {
+bot.command('remove', async (ctx) => {
+  if (ctx.from.id !== ADMIN_ID)
     return ctx.reply('Только админ может удалять игроков.');
-  }
 
-  const parts = ctx.message.text.trim().split(/\s+/);
-  const idStr = parts[1];
-
-  if (!idStr) {
-    return ctx.reply('Использование: /remove <id>');
-  }
-
+  const idStr = ctx.message.text.trim().split(/\s+/)[1];
   const userId = Number(idStr);
-  if (!Number.isInteger(userId)) {
-    return ctx.reply('Нужен числовой id. Пример: /remove 123456789');
-  }
+  if (!Number.isInteger(userId))
+    return ctx.reply('Использование: /remove <id>');
 
-  if (!players.has(userId)) {
-    return ctx.reply('Игрок с таким id не найден.');
-  }
+  const player = await getPlayer(userId);
+  if (!player)
+    return ctx.reply('Игрок не найден.');
 
-  const player = players.get(userId);
-
-  players.delete(userId);
+  await removePlayer(userId);
 
   const name = [player.first_name, player.last_name]
-  .filter(Boolean)
-  .join(' ');
+    .filter(Boolean)
+    .join(' ');
   const username = player.username ? `(@${player.username})` : '';
 
-  ctx.reply(`Удален ${name} ${username} [${player.id}]`);
+  await ctx.reply(`Удалён: ${name} ${username} [${player.id}]`);
 });
 
-bot.command('players', (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) {
-    return ctx.reply('Только админ может смотреть список игроков.');
-  }
+bot.command('players', async (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ может смотреть список игроков.');
 
-  if (players.size === 0) {
-    return ctx.reply('Пока никто не зарегистрирован.');
-  }
+  const rows = await listPlayers();
+  if (rows.length === 0) return ctx.reply('Пока никто не зарегистрирован.');
 
-  let message = 'Зарегистрированные игроки:\n\n';
+  const text = rows.map((p, i) => {
+    const name = [p.first_name, p.last_name].filter(Boolean).join(' ');
+    const u = p.username ? `(@${p.username})` : '';
+    return `${i + 1}. ${name} ${u} [${p.id}]`;
+  }).join('\n');
 
-  let i = 1;
-  for (const player of players.values()) {
-    const name = [player.first_name, player.last_name]
-      .filter(Boolean)
-      .join(' ');
-    const username = player.username ? `(@${player.username})` : '';
-    message += `${i}. ${name} ${username} [${player.id}]\n`;
-    i++;
-  }
-
-  ctx.reply(message);
+  await ctx.reply(`Зарегистрированные игроки:\n\n${text}`);
 });
 
 bot.command('expand', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
-
   if (registrationOpen) return ctx.reply('Открыта регистрация.');
   if (expansionOpen) return ctx.reply('Фаза уже открыта.');
-  if (players.size == 0) return ctx.reply('Никто не зарегистрировался.');
+
+  const rows = await listPlayers();
+  if (rows.length === 0) return ctx.reply('Никто не зарегистрировался.');
 
   expansionOpen = true;
 
-  await ctx.reply('Вы открыли фазу экспансии');
+  const adminIsPlayer = rows.some(p => p.id === ADMIN_ID);
 
-  for (const chatId of players.keys()) {
-    await bot.telegram.sendMessage(chatId, 'Фаза экспансии открыта. Пришлите скрин.');
+  // Если админ НЕ игрок — отдельно сообщаем ему
+  if (!adminIsPlayer) {
+    await ctx.reply('Вы открыли фазу экспансии');
+  }
+
+  for (const p of rows) {
+    await bot.telegram.sendMessage(
+      p.id,
+      'Фаза экспансии открыта. Пришлите скрин.'
+    );
   }
 });
 
 bot.command('endexpand', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
 
-  expansionOpen = false;
-  
-  await ctx.reply('Вы закрыли фазу экспансии.');
+  if (!expansionOpen) return ctx.reply('Фаза уже закрыта.');
 
-  for (const chatId of players.keys()) {
-    await bot.telegram.sendMessage(chatId, 'Фаза экспансии закрыта.');
+  const rows = await listPlayers();
+
+  expansionOpen = false;
+
+  const adminIsPlayer = rows.some(p => p.id === ADMIN_ID);
+
+  // Если админ не игрок — отдельно уведомляем
+  if (!adminIsPlayer) {
+    await ctx.reply('Вы закрыли фазу экспансии.');
+  }
+
+  for (const p of rows) {
+    await bot.telegram.sendMessage(
+      p.id,
+      'Фаза экспансии закрыта.'
+    );
   }
 });
 
-bot.command('expandinfo', (ctx) => {
-    if (!expansionOpen) {
-        return ctx.reply('Фаза экспансии закрыта.');
-    }
+bot.command('expandinfo', async (ctx) => {
+  if (!expansionOpen) {
+    return ctx.reply('Фаза экспансии закрыта.');
+  }
 
-    const total = players.size;
-    const submitted = moves.size;
+  const total = await countPlayers();
+  const submitted = moves.size; // пока ходы в памяти
 
-    ctx.reply(`Ведется планирование.\nСдали: ${submitted}/${total}`);
+  await ctx.reply(`Ведется планирование.\nСдали: ${submitted}/${total}`);
 });
 
 bot.on('photo', async (ctx) => {
