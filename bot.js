@@ -229,12 +229,12 @@ bot.command('expand', async (ctx) => {
   }
 });
 
-bot.command('endexpand', (ctx) => {
+bot.command('endexpand', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
 
   expansionOpen = false;
   
-  ctx.reply('Вы закрыли фазу экспансии.');
+  await ctx.reply('Вы закрыли фазу экспансии.');
 
   for (const chatId of players.keys()) {
     await bot.telegram.sendMessage(chatId, 'Фаза экспансии закрыта.');
