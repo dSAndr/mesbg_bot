@@ -15,12 +15,12 @@ if (!process.env.BOT_TOKEN) {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 initDb()
-  .then(() => {
-    console.log('DB ready');
-    return bot.launch();
-  })
+  .then(() => console.log('DB ready'))
+  .catch((e) => console.error('DB error:', e));
+
+bot.launch()
   .then(() => console.log('Bot launched'))
-  .catch(console.error);
+  .catch((e) => console.error('Launch error:', e));
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
@@ -284,3 +284,8 @@ bot.on('document', async (ctx) => {
 
   await handleMove(ctx, 'document', doc.file_id);
 });
+
+bot.catch((err, ctx) => console.error('BOT ERROR', err));
+
+process.on('unhandledRejection', (err) => console.error('unhandledRejection', err));
+process.on('uncaughtException', (err) => console.error('uncaughtException', err));
