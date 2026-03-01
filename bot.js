@@ -156,30 +156,6 @@ bot.command('add', async (ctx) => {
   }
 });
 
-bot.command('players', (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) {
-    return ctx.reply('Только админ может смотреть список игроков.');
-  }
-
-  if (players.size === 0) {
-    return ctx.reply('Пока никто не зарегистрирован.');
-  }
-
-  let message = 'Зарегистрированные игроки:\n\n';
-
-  let i = 1;
-  for (const player of players.values()) {
-    const name = [player.first_name, player.last_name]
-      .filter(Boolean)
-      .join(' ');
-    const username = player.username ? `(@${player.username})` : '';
-    message += `${i}. ${name} ${username} [${player.id}]\n`;
-    i++;
-  }
-
-  ctx.reply(message);
-});
-
 bot.command('remove', (ctx) => {
   if (ctx.from.id !== ADMIN_ID) {
     return ctx.reply('Только админ может удалять игроков.');
@@ -213,6 +189,30 @@ bot.command('remove', (ctx) => {
   ctx.reply(`Удален ${name} ${username} [${player.id}]`);
 });
 
+bot.command('players', (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) {
+    return ctx.reply('Только админ может смотреть список игроков.');
+  }
+
+  if (players.size === 0) {
+    return ctx.reply('Пока никто не зарегистрирован.');
+  }
+
+  let message = 'Зарегистрированные игроки:\n\n';
+
+  let i = 1;
+  for (const player of players.values()) {
+    const name = [player.first_name, player.last_name]
+      .filter(Boolean)
+      .join(' ');
+    const username = player.username ? `(@${player.username})` : '';
+    message += `${i}. ${name} ${username} [${player.id}]\n`;
+    i++;
+  }
+
+  ctx.reply(message);
+});
+
 bot.command('expand', (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
 
@@ -222,7 +222,11 @@ bot.command('expand', (ctx) => {
 
   expansionOpen = true;
 
-  ctx.reply('Фаза экспансии открыта. Присылайте скрины в личку боту.');
+  ctx.reply('Вы открыли фазу экспансии');
+
+  for (const chatId of players.keys()) {
+    await bot.telegram.sendMessage(chatId, 'Фаза экспансии открыта. Пришлите скрин.');
+  }
 });
 
 bot.command('endexpand', (ctx) => {
@@ -230,7 +234,11 @@ bot.command('endexpand', (ctx) => {
 
   expansionOpen = false;
   
-  ctx.reply('Фаза экспансии закрыта.');
+  ctx.reply('Вы закрыли фазу экспансии.');
+
+  for (const chatId of players.keys()) {
+    await bot.telegram.sendMessage(chatId, 'Фаза экспансии закрыта.');
+  }
 });
 
 bot.command('expandinfo', (ctx) => {
