@@ -222,7 +222,7 @@ bot.command('expand', async (ctx) => {
 
   expansionOpen = true;
 
-  ctx.reply('Вы открыли фазу экспансии');
+  await ctx.reply('Вы открыли фазу экспансии');
 
   for (const chatId of players.keys()) {
     await bot.telegram.sendMessage(chatId, 'Фаза экспансии открыта. Пришлите скрин.');
