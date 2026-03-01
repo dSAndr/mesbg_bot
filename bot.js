@@ -127,6 +127,35 @@ bot.command('join', (ctx) => {
   ctx.reply('Ты успешно зарегистрирован.');
 });
 
+bot.command('add', async (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
+
+  const parts = ctx.message.text.trim().split(/\s+/);
+  const idStr = parts[1];
+
+  if (!idStr) return ctx.reply('Использование: /add <id>');
+
+  const userId = Number(idStr);
+  if (!Number.isInteger(userId)) return ctx.reply('ID должен быть числом.');
+
+  if (players.has(userId)) return ctx.reply('Игрок уже зарегистрирован.');
+
+  try {
+    const chat = await bot.telegram.getChat(userId);
+
+    players.set(userId, {
+      id: chat.id,
+      first_name: chat.first_name || '',
+      last_name: chat.last_name || '',
+      username: chat.username || null
+    });
+
+    ctx.reply(`Добавлен: ${chat.first_name || ''} ${chat.last_name || ''} (@${chat.username || '-'})`);
+  } catch (e) {
+    ctx.reply('Не удалось получить данные пользователя. Возможно, он не писал боту.');
+  }
+});
+
 bot.command('players', (ctx) => {
   if (ctx.from.id !== ADMIN_ID) {
     return ctx.reply('Только админ может смотреть список игроков.');
