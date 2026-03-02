@@ -215,12 +215,12 @@ bot.command('expand', async (ctx) => {
     await ctx.reply('Вы открыли фазу экспансии');
   }
 
-  for (const p of rows) {
-    await bot.telegram.sendMessage(
-      p.id,
-      'Фаза экспансии открыта. Пришлите скрин.'
-    );
-  }
+  // for (const p of rows) {
+  //   await bot.telegram.sendMessage(
+  //     p.id,
+  //     'Фаза экспансии открыта. Пришлите скрин.'
+  //   );
+  // }
 });
 
 bot.command('endexpand', async (ctx) => {
@@ -238,9 +238,9 @@ bot.command('endexpand', async (ctx) => {
     await ctx.reply('Вы закрыли фазу экспансии.');
   }
 
-  for (const p of rows) {
-    await bot.telegram.sendMessage(p.id, 'Фаза экспансии закрыта.');
-  }
+  // for (const p of rows) {
+  //   await bot.telegram.sendMessage(p.id, 'Фаза экспансии закрыта.');
+  // }
 });
 
 bot.command('expandinfo', async (ctx) => {
