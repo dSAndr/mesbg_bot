@@ -253,13 +253,13 @@ bot.command('expandinfo', async (ctx) => {
   }
 
   const total = await countPlayers();
-  const submitted = moves.size; // пока ходы в памяти
+  const submitted = await countMoves();  // ← из БД
 
   await ctx.reply(`Ведется планирование.\nСдали: ${submitted}/${total}`);
 });
 
 bot.on('photo', async (ctx) => {
-  if (!players.has(ctx.from.id)) return ctx.reply('Ты не зарегистрирован.');
+  if (!(await hasPlayer(ctx.from.id))) return ctx.reply('Ты не зарегистрирован.');
   if (!expansionOpen) return ctx.reply('Сейчас фаза экспансии закрыта.');
 
   const photos = ctx.message.photo;
@@ -269,7 +269,7 @@ bot.on('photo', async (ctx) => {
 });
 
 bot.on('document', async (ctx) => {
-  if (!players.has(ctx.from.id)) return ctx.reply('Ты не зарегистрирован.');
+  if (!(await hasPlayer(ctx.from.id))) return ctx.reply('Ты не зарегистрирован.');
   if (!expansionOpen) return ctx.reply('Сейчас фаза экспансии закрыта.');
 
   const doc = ctx.message.document;
