@@ -18,10 +18,17 @@ async function initDb() {
 
   await pool.query(`
   CREATE TABLE IF NOT EXISTS moves (
-    player_id BIGINT PRIMARY KEY,
-    kind TEXT NOT NULL,      -- 'photo' или 'document'
-    file_id TEXT NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT now()
+      player_id BIGINT PRIMARY KEY,
+      kind TEXT NOT NULL,      -- 'photo' или 'document'
+      file_id TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     )
   `);
 }
@@ -110,6 +117,30 @@ async function clearMoves() {
   await pool.query(`DELETE FROM moves`);
 }
 
+async function setState(key, value) {
+  await pool.query(
+    `INSERT INTO state (key, value)
+     VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, String(value)]
+  );
+}
+
+async function getState(key, defaultValue = null) {
+  const res = await pool.query(`SELECT value FROM state WHERE key = $1`, [key]);
+  if (res.rowCount === 0) return defaultValue;
+  return res.rows[0].value;
+}
+
+async function isExpansionOpen() {
+  const v = await getState('expansion_open', 'false');
+  return v === 'true';
+}
+
+async function setExpansionOpen(isOpen) {
+  await setState('expansion_open', isOpen ? 'true' : 'false');
+}
+
 module.exports = {
   initDb,
   addPlayer,
@@ -122,5 +153,9 @@ module.exports = {
   hasMove,
   countMoves,
   listMoves,
-  clearMoves
+  clearMoves,
+  setState,
+  getState,
+  isExpansionOpen,
+  setExpansionOpen
 };
