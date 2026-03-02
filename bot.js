@@ -199,27 +199,28 @@ bot.command('players', async (ctx) => {
 
 bot.command('expand', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
-  if (registrationOpen) return ctx.reply('Открыта регистрация.');
-  if (expansionOpen) return ctx.reply('Фаза уже открыта.');
+
+  // регистрация берётся из state (если ты уже перенёс её)
+  if (await isRegistrationOpen()) return ctx.reply('Открыта регистрация.');
+
+  if (await isExpansionOpen()) return ctx.reply('Фаза уже открыта.');
 
   const rows = await listPlayers();
   if (rows.length === 0) return ctx.reply('Никто не зарегистрировался.');
 
-  await setExpansionOpen(true)
+  await setExpansionOpen(true);
 
   const adminIsPlayer = rows.some(p => p.id === ADMIN_ID);
-
-  // Если админ НЕ игрок — отдельно сообщаем ему
-  if (await isExpansionOpen()) {
+  if (!adminIsPlayer) {
     await ctx.reply('Вы открыли фазу экспансии');
   }
 
-  // for (const p of rows) {
-  //   await bot.telegram.sendMessage(
-  //     p.id,
-  //     'Фаза экспансии открыта. Пришлите скрин.'
-  //   );
-  // }
+  for (const p of rows) {
+    await bot.telegram.sendMessage(
+      p.id,
+      'Фаза экспансии открыта. Пришлите скрин.'
+    );
+  }
 });
 
 bot.command('endexpand', async (ctx) => {
@@ -229,21 +230,17 @@ bot.command('endexpand', async (ctx) => {
 
   const rows = await listPlayers();
 
-  await setExpansionOpen(false)
+  await setExpansionOpen(false);
+  await clearMoves(); // опционально, но полезно
 
   const adminIsPlayer = rows.some(p => p.id === ADMIN_ID);
-
-  // Если админ не игрок — отдельно уведомляем
   if (!adminIsPlayer) {
     await ctx.reply('Вы закрыли фазу экспансии.');
   }
 
-  // for (const p of rows) {
-  //   await bot.telegram.sendMessage(
-  //     p.id,
-  //     'Фаза экспансии закрыта.'
-  //   );
-  // }
+  for (const p of rows) {
+    await bot.telegram.sendMessage(p.id, 'Фаза экспансии закрыта.');
+  }
 });
 
 bot.command('expandinfo', async (ctx) => {
