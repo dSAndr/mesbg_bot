@@ -31,12 +31,6 @@ const MAX_PLAYERS = 10;
 let registrationOpen = false;
 let expansionOpen = false;
 
-function playerLabel(p) {
-  const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
-  const username = p.username ? `@${p.username}` : '';
-  return `${name || 'Игрок'} ${username}`.trim();
-}
-
 async function handleMove(ctx, kind, fileId) {
   const userId = ctx.from.id;
 
@@ -221,12 +215,12 @@ bot.command('expand', async (ctx) => {
     await ctx.reply('Вы открыли фазу экспансии');
   }
 
-  for (const p of rows) {
-    await bot.telegram.sendMessage(
-      p.id,
-      'Фаза экспансии открыта. Пришлите скрин.'
-    );
-  }
+  // for (const p of rows) {
+  //   await bot.telegram.sendMessage(
+  //     p.id,
+  //     'Фаза экспансии открыта. Пришлите скрин.'
+  //   );
+  // }
 });
 
 bot.command('endexpand', async (ctx) => {
@@ -245,12 +239,12 @@ bot.command('endexpand', async (ctx) => {
     await ctx.reply('Вы закрыли фазу экспансии.');
   }
 
-  for (const p of rows) {
-    await bot.telegram.sendMessage(
-      p.id,
-      'Фаза экспансии закрыта.'
-    );
-  }
+  // for (const p of rows) {
+  //   await bot.telegram.sendMessage(
+  //     p.id,
+  //     'Фаза экспансии закрыта.'
+  //   );
+  // }
 });
 
 bot.command('expandinfo', async (ctx) => {
