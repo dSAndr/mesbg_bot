@@ -1,4 +1,4 @@
-const { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer, getPlayer, upsertMove, hasMove, countMoves, listMoves, clearMoves } = require('./db');
+const { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer, getPlayer, upsertMove, hasMove, countMoves, listMoves, clearMoves, isExpansionOpen, setExpansionOpen, isRegistrationOpen, setRegistrationOpen } = require('./db');
 const { Telegraf } = require('telegraf');
 const http = require('http');
 
@@ -29,7 +29,6 @@ process.once('SIGTERM', () => bot.stop('SIGTERM'));
 const ADMIN_ID = 492434371;
 const MAX_PLAYERS = 10;
 let registrationOpen = false;
-let expansionOpen = false;
 
 async function handleMove(ctx, kind, fileId) {
   const userId = ctx.from.id;
@@ -48,7 +47,7 @@ async function handleMove(ctx, kind, fileId) {
   );
 
   if (total > 0 && submitted === total) {
-    expansionOpen = false;
+    await setExpansionOpen(false)
 
     const rows = await listMoves(); // из БД
 
@@ -89,26 +88,26 @@ bot.start((ctx) => {
     ctx.reply('Mae govannen, mellon\nПриветствую тебя, друг');
 });
 
-bot.command('open', (ctx) => {
+bot.command('open', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) {
     return ctx.reply('Только админ может открыть регистрацию.');
   }
 
-  registrationOpen = true;
+  await setRegistrationOpen(true);
   ctx.reply('Регистрация открыта.');
 });
 
-bot.command('lock', (ctx) => {
+bot.command('lock', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) {
     return ctx.reply('Только админ может закрыть регистрацию.');
   }
 
-  registrationOpen = false;
+  await setRegistrationOpen(false);
   ctx.reply('Регистрация закрыта.');
 });
 
 bot.command('join', async (ctx) => {
-  if (!registrationOpen) return ctx.reply('Регистрация сейчас закрыта.');
+  if (!(await isRegistrationOpen())) return ctx.reply('Регистрация сейчас закрыта.');
 
   const userId = ctx.from.id;
 
@@ -206,12 +205,12 @@ bot.command('expand', async (ctx) => {
   const rows = await listPlayers();
   if (rows.length === 0) return ctx.reply('Никто не зарегистрировался.');
 
-  expansionOpen = true;
+  await setExpansionOpen(true)
 
   const adminIsPlayer = rows.some(p => p.id === ADMIN_ID);
 
   // Если админ НЕ игрок — отдельно сообщаем ему
-  if (!adminIsPlayer) {
+  if (await isExpansionOpen()) {
     await ctx.reply('Вы открыли фазу экспансии');
   }
 
@@ -226,11 +225,11 @@ bot.command('expand', async (ctx) => {
 bot.command('endexpand', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return ctx.reply('Только админ.');
 
-  if (!expansionOpen) return ctx.reply('Фаза уже закрыта.');
+  if (!(await isExpansionOpen())) return ctx.reply('Фаза уже закрыта.');
 
   const rows = await listPlayers();
 
-  expansionOpen = false;
+  await setExpansionOpen(false)
 
   const adminIsPlayer = rows.some(p => p.id === ADMIN_ID);
 
@@ -248,7 +247,7 @@ bot.command('endexpand', async (ctx) => {
 });
 
 bot.command('expandinfo', async (ctx) => {
-  if (!expansionOpen) {
+  if (!(await isExpansionOpen())) {
     return ctx.reply('Фаза экспансии закрыта.');
   }
 
@@ -260,7 +259,7 @@ bot.command('expandinfo', async (ctx) => {
 
 bot.on('photo', async (ctx) => {
   if (!(await hasPlayer(ctx.from.id))) return ctx.reply('Ты не зарегистрирован.');
-  if (!expansionOpen) return ctx.reply('Сейчас фаза экспансии закрыта.');
+  if (!(await isExpansionOpen())) return ctx.reply('Сейчас фаза экспансии закрыта.');
 
   const photos = ctx.message.photo;
   const best = photos[photos.length - 1];
@@ -270,7 +269,7 @@ bot.on('photo', async (ctx) => {
 
 bot.on('document', async (ctx) => {
   if (!(await hasPlayer(ctx.from.id))) return ctx.reply('Ты не зарегистрирован.');
-  if (!expansionOpen) return ctx.reply('Сейчас фаза экспансии закрыта.');
+  if (!(await isExpansionOpen())) return ctx.reply('Сейчас фаза экспансии закрыта.');
 
   const doc = ctx.message.document;
 

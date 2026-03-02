@@ -141,6 +141,15 @@ async function setExpansionOpen(isOpen) {
   await setState('expansion_open', isOpen ? 'true' : 'false');
 }
 
+async function isRegistrationOpen() {
+  const v = await getState('registration_open', 'false');
+  return v === 'true';
+}
+
+async function setRegistrationOpen(isOpen) {
+  await setState('registration_open', isOpen ? 'true' : 'false');
+}
+
 module.exports = {
   initDb,
   addPlayer,
@@ -157,5 +166,7 @@ module.exports = {
   setState,
   getState,
   isExpansionOpen,
-  setExpansionOpen
+  setExpansionOpen,
+  isRegistrationOpen,
+  setRegistrationOpen
 };
