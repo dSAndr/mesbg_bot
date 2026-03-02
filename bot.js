@@ -1,4 +1,4 @@
-const { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer, getPlayer } = require('./db');
+const { initDb, addPlayer, removePlayer, listPlayers, countPlayers, hasPlayer, getPlayer, upsertMove, hasMove, countMoves, listMoves, clearMoves } = require('./db');
 const { Telegraf } = require('telegraf');
 const http = require('http');
 
@@ -27,8 +27,6 @@ process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
 
 const ADMIN_ID = 492434371;
-const players = new Map(); // userId -> user info
-const moves = new Map(); // userId -> fileId (скрин хода)
 const MAX_PLAYERS = 10;
 let registrationOpen = false;
 let expansionOpen = false;
@@ -40,53 +38,57 @@ function playerLabel(p) {
 }
 
 async function handleMove(ctx, kind, fileId) {
-    const wasSubmitted = moves.has(ctx.from.id);
+  const userId = ctx.from.id;
 
-    moves.set(ctx.from.id, { kind, fileId });
+  const wasSubmitted = await hasMove(userId);
 
-    await ctx.reply(
-        wasSubmitted
-        ? `Ход обновлён. (${moves.size}/${players.size})`
-        : `Ход принят. (${moves.size}/${players.size})`
-    );
+  await upsertMove(userId, kind, fileId);
 
-    if (players.size > 0 && moves.size === players.size) {
-        expansionOpen = false;
+  const submitted = await countMoves();
+  const total = await countPlayers();
 
-        const pack = [];
-        for (const [userId, move] of moves.entries()) {
-            const p = players.get(userId);
-            pack.push({ ...move, caption: playerLabel(p) });
+  await ctx.reply(
+    wasSubmitted
+      ? `Ход обновлён. (${submitted}/${total})`
+      : `Ход принят. (${submitted}/${total})`
+  );
+
+  if (total > 0 && submitted === total) {
+    expansionOpen = false;
+
+    const rows = await listMoves(); // из БД
+
+    // легенда + media
+    const legend = rows.map((r, i) => {
+      const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim();
+      const u = r.username ? `@${r.username}` : '';
+      return `${i + 1}. ${(name || 'Игрок')} ${u}`.trim();
+    }).join('\n');
+
+    const media = rows.map((r) => ({
+      type: r.kind,
+      media: r.file_id,
+    }));
+
+    const players = await listPlayers();
+    for (const p of players) {
+      await bot.telegram.sendMessage(p.id, `📜 Все ходы получены:\n${legend}`);
+
+      try {
+        await bot.telegram.sendMediaGroup(p.id, media);
+      } catch (e) {
+        console.error('Ошибка при отправке альбома:', e);
+        await bot.telegram.sendMessage(p.id, 'Не удалось отправить альбом, отправляю по одному.');
+
+        for (const r of rows) {
+          if (r.kind === 'photo') await bot.telegram.sendPhoto(p.id, r.file_id);
+          else await bot.telegram.sendDocument(p.id, r.file_id);
         }
-
-        for (const chatId of players.keys()) {
-            const legend = pack.map((item, i) => `${i + 1}. ${item.caption}`).join('\n');
-            await bot.telegram.sendMessage(chatId, `📜 Все ходы получены:\n${legend}`);
-
-            const media = pack.map((item) => ({
-                type: item.kind,
-                media: item.fileId,
-            }));
-
-            try {
-                await bot.telegram.sendMediaGroup(chatId, media);
-            } 
-            catch (e) {
-                console.error('Ошибка при отправке альбома:', e);
-
-                await bot.telegram.sendMessage(chatId, 'Не удалось отправить альбом, отправляю по одному.');
-
-                for (const item of pack) {
-                    if (item.kind === 'photo') {
-                        await bot.telegram.sendPhoto(chatId, item.fileId);
-                    } else {
-                        await bot.telegram.sendDocument(chatId, item.fileId);
-                    }
-                }
-            }
-        }
-        moves.clear();
+      }
     }
+
+    await clearMoves();
+  }
 }
 
 bot.start((ctx) => {

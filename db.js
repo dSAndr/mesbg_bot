@@ -15,6 +15,15 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+
+  await pool.query(`
+  CREATE TABLE IF NOT EXISTS moves (
+    player_id BIGINT PRIMARY KEY,
+    kind TEXT NOT NULL,      -- 'photo' или 'document'
+    file_id TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
 }
 
 async function addPlayer(p) {
@@ -65,6 +74,42 @@ async function getPlayer(id) {
   return res.rows[0] || null;
 }
 
+async function upsertMove(playerId, kind, fileId) {
+  await pool.query(
+    `INSERT INTO moves (player_id, kind, file_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (player_id) DO UPDATE SET
+       kind = EXCLUDED.kind,
+       file_id = EXCLUDED.file_id,
+       updated_at = now()`,
+    [playerId, kind, fileId]
+  );
+}
+
+async function hasMove(playerId) {
+  const res = await pool.query(`SELECT 1 FROM moves WHERE player_id = $1`, [playerId]);
+  return res.rowCount > 0;
+}
+
+async function countMoves() {
+  const res = await pool.query(`SELECT COUNT(*)::int AS cnt FROM moves`);
+  return res.rows[0].cnt;
+}
+
+async function listMoves() {
+  const res = await pool.query(
+    `SELECT m.player_id, m.kind, m.file_id, p.first_name, p.last_name, p.username
+     FROM moves m
+     JOIN players p ON p.id = m.player_id
+     ORDER BY m.updated_at ASC`
+  );
+  return res.rows; // [{player_id, kind, file_id, first_name...}]
+}
+
+async function clearMoves() {
+  await pool.query(`DELETE FROM moves`);
+}
+
 module.exports = {
   initDb,
   addPlayer,
@@ -72,5 +117,10 @@ module.exports = {
   listPlayers,
   countPlayers,
   hasPlayer,
-  getPlayer
+  getPlayer,
+  upsertMove,
+  hasMove,
+  countMoves,
+  listMoves,
+  clearMoves
 };
